@@ -5,17 +5,7 @@ WORKDIR /app
 # Install production dependencies first (layer caching)
 # Exclude test deps — use requirements-dev.txt for local development
 COPY requirements.txt .
-RUN pip install --no-cache-dir \
-    fastapi \
-    "uvicorn[standard]" \
-    pydantic \
-    sqlalchemy \
-    aiosqlite \
-    httpx \
-    numpy \
-    python-dotenv \
-    "beautifulsoup4>=4.12.0" \
-    "lxml>=5.2.0"
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend source under /app/backend/ so imports like `backend.app.main` resolve
 COPY . /app/backend/
