@@ -258,7 +258,7 @@ class WebsiteAuditorEngine:
             {
                 "type": "UncaughtError",
                 "severity": "ERROR",
-                "message": "POST https://api.example.com/api/v1/payment net::ERR_HTTP_RESPONSE_CODE_FAILURE 503 (Service Unavailable)",
+                "message": f"POST {url}/api/v1/payment net::ERR_HTTP_RESPONSE_CODE_FAILURE 503 (Service Unavailable)",
                 "source_file": "PaymentForm.tsx",
                 "line": 142,
                 "column": 18,
