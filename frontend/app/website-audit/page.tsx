@@ -5,15 +5,46 @@ import Link from "next/link";
 import { 
   Globe, Play, Search, AlertTriangle, CheckCircle2, ShieldCheck, Activity, 
   Lock, ArrowRight, RefreshCw, Cpu, Layers, FileText, AlertCircle, Sparkles,
-  Terminal, Server, Clock, Brain
+  Terminal, Server, Clock, Brain, Upload
 } from "lucide-react";
-import { startWebsiteAudit, fetchAuditProgress, fetchAuditResults, fetchAudits } from "@/lib/api";
+import { startWebsiteAudit, fetchAuditProgress, fetchAuditResults, fetchAudits, ingestLogs } from "@/lib/api";
 
 export default function WebsiteAuditPage() {
   const [targetUrl, setTargetUrl] = useState("http://localhost:3000");
   const [scanMode, setScanMode] = useState("FULL_AUDIT");
   const [logsContent, setLogsContent] = useState("");
   const [showLogsDrawer, setShowLogsDrawer] = useState(false);
+  const [isUploadingLogs, setIsUploadingLogs] = useState(false);
+  const [logUploadMessage, setLogUploadMessage] = useState<string | null>(null);
+  const logFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleLogFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsUploadingLogs(true);
+    setLogUploadMessage(null);
+    try {
+      let ingestedEvents: any[] = [];
+      let totalErrCount = 0;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const text = await file.text();
+        const res = await ingestLogs(text, file.name);
+        if (res.logs) {
+          ingestedEvents = [...ingestedEvents, ...res.logs];
+        }
+        totalErrCount += res.error_count || 0;
+      }
+      setAuditResults((prev: any) => ({
+        ...prev,
+        logs_analyzed: [...(prev?.logs_analyzed || []), ...ingestedEvents]
+      }));
+      setLogUploadMessage(`Successfully ingested ${ingestedEvents.length} log event(s) with ${totalErrCount} error(s) parsed.`);
+    } catch (err: any) {
+      alert("Error uploading log file: " + (err.message || err));
+    } finally {
+      setIsUploadingLogs(false);
+    }
+  };
 
   const [activeAuditId, setActiveAuditId] = useState<string | null>(null);
   const [auditStatus, setAuditStatus] = useState<any>(null);
@@ -550,9 +581,50 @@ export default function WebsiteAuditPage() {
           {/* Tab 6: Logs & Correlation (Spec 15, 16) */}
           {activeTab === "LOGS" && (
             <div className="bg-[#FFFFFF] border border-[#E8E6E1] rounded-2xl p-5 shadow-card space-y-4">
-              <h3 className="font-semibold text-sm text-[#242424] flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-[#242424]" /> Parsed Server Logs & Incident Correlation
-              </h3>
+              <div className="flex items-center justify-between border-b border-[#E8E6E1] pb-3">
+                <h3 className="font-semibold text-sm text-[#242424] flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-[#242424]" /> Parsed Server Logs & Incident Correlation
+                </h3>
+                <span className="text-xs text-[#8A8A8A]">
+                  {auditResults.logs_analyzed?.length || 0} Events Ingested
+                </span>
+              </div>
+
+              {/* Interactive Log Upload Dropzone */}
+              <input
+                type="file"
+                ref={logFileInputRef}
+                className="hidden"
+                multiple
+                accept=".json,.jsonl,.txt,.csv,.log"
+                onChange={(e) => handleLogFileUpload(e.target.files)}
+              />
+              <div 
+                onClick={() => logFileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (e.dataTransfer.files) {
+                    handleLogFileUpload(e.dataTransfer.files);
+                  }
+                }}
+                className="p-5 bg-[#FAFAF8] hover:bg-[#F5F5F0] transition-colors border border-dashed border-[#CBD5E1] hover:border-[#2563EB] rounded-2xl text-center space-y-2 cursor-pointer group"
+              >
+                <Upload className="w-6 h-6 text-[#8A8A8A] group-hover:text-[#2563EB] mx-auto transition-colors" />
+                <div className="font-semibold text-xs text-[#242424]">
+                  {isUploadingLogs ? "Ingesting and Parsing Log File(s)..." : "Upload application logs for deeper root cause correlation"}
+                </div>
+                <p className="text-[11px] text-[#6B6B6B]">
+                  Click to browse or drag & drop log files (JSON, JSONL, TXT, CSV, Apache/Nginx formats)
+                </p>
+                {logUploadMessage && (
+                  <div className="text-xs text-[#059669] bg-[#ECFDF5] border border-[#A7F3D0] rounded-lg p-2 font-medium inline-block mt-2">
+                    ✓ {logUploadMessage}
+                  </div>
+                )}
+              </div>
+
               {auditResults.logs_analyzed?.length > 0 ? (
                 <div className="space-y-2 font-mono text-xs max-h-80 overflow-y-auto">
                   {auditResults.logs_analyzed.map((l: any, i: number) => (
@@ -562,8 +634,8 @@ export default function WebsiteAuditPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-xs text-[#8A8A8A] italic p-4 bg-[#FAFAF8] border border-[#E8E6E1] rounded-xl">
-                  No external server logs attached during this scan.
+                <div className="text-xs text-[#8A8A8A] italic p-4 bg-[#FAFAF8] border border-[#E8E6E1] rounded-xl text-center">
+                  No server log files uploaded yet. Click or drag & drop log files above to parse and correlate.
                 </div>
               )}
             </div>
