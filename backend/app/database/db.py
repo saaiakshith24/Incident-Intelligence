@@ -5,10 +5,10 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./incident_intelligence.db")
 
+# check_same_thread is a pysqlite-only argument and must NOT be passed to aiosqlite
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 )
 
 AsyncSessionLocal = sessionmaker(

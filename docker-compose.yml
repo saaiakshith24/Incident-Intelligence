@@ -1,48 +1,42 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    container_name: incident-db
-    environment:
-      POSTGRES_USER: incident_user
-      POSTGRES_PASSWORD: incident_password
-      POSTGRES_DB: incident_intelligence
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U incident_user -d incident_intelligence"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: incident-backend
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./incident_intelligence.db
-      - HINDSIGHT_API_URL=http://backend:8000/api/memory
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - ALLOWED_ORIGINS=http://localhost:3000,http://frontend:3000,http://localhost:80
+    volumes:
+      - backend_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: incident-frontend
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
+      # In Docker, frontend server-side calls go to the backend container
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # Internal server-side URL (used by Next.js SSR/API routes)
+      - BACKEND_URL=http://backend:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
-  postgres_data:
+  backend_data:
